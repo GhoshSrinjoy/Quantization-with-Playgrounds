@@ -1,0 +1,2528 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Introducing Quantization for LLMs</title>
+    <style>
+        :root {
+            --bg-primary: #ffffff;
+            --bg-secondary: #f8f9fa;
+            --bg-tertiary: #e9ecef;
+            --text-primary: #212529;
+            --text-secondary: #495057;
+            --text-tertiary: #6c757d;
+            --accent: #4361ee;
+            --accent-hover: #3651de;
+            --border: #dee2e6;
+            --shadow: rgba(0, 0, 0, 0.1);
+            --code-bg: #f1f3f5;
+            --error: #e03131;
+            --success: #2f9e44;
+        }
+
+        [data-theme="dark"] {
+            --bg-primary: #1a1b1e;
+            --bg-secondary: #25262b;
+            --bg-tertiary: #2c2e33;
+            --text-primary: #edf2f7;
+            --text-secondary: #cbd5e0;
+            --text-tertiary: #a0aec0;
+            --accent: #4361ee;
+            --accent-hover: #5568f3;
+            --border: #4a5568;
+            --shadow: rgba(0, 0, 0, 0.3);
+            --code-bg: #2d3748;
+            --error: #fc8181;
+            --success: #68d391;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: var(--text-primary);
+            background-color: var(--bg-primary);
+            transition: background-color 0.3s, color 0.3s;
+        }
+
+        /* Navigation */
+        nav {
+            background-color: var(--bg-secondary);
+            border-bottom: 1px solid var(--border);
+            padding: 1rem 2rem;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: 0 2px 4px var(--shadow);
+        }
+
+        .nav-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .nav-brand {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--accent);
+        }
+
+        .nav-menu {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+
+        .nav-item {
+            padding: 0.5rem 1rem;
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            border-radius: 0.375rem;
+            transition: all 0.2s;
+            font-size: 0.875rem;
+        }
+
+        .nav-item:hover {
+            background-color: var(--bg-tertiary);
+            color: var(--text-primary);
+        }
+
+        .nav-item.active {
+            background-color: var(--accent);
+            color: white;
+        }
+
+        .theme-toggle {
+            background: none;
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+            padding: 0.5rem;
+            border-radius: 0.375rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .theme-toggle:hover {
+            background-color: var(--bg-tertiary);
+        }
+
+        /* Main Content */
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .page {
+            display: none;
+            animation: fadeIn 0.3s;
+        }
+
+        .page.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .page-header {
+            margin-bottom: 2rem;
+            padding-bottom: 1rem;
+            border-bottom: 2px solid var(--accent);
+        }
+
+        .page-title {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            color: var(--text-primary);
+        }
+
+        .page-subtitle {
+            color: var(--text-secondary);
+            font-size: 1.125rem;
+        }
+
+        /* Cards */
+        .card {
+            background-color: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 0.5rem;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            transition: box-shadow 0.2s;
+        }
+
+        .card:hover {
+            box-shadow: 0 4px 6px var(--shadow);
+        }
+
+        .card-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 0.75rem;
+            color: var(--text-primary);
+        }
+
+        /* Grid Layouts */
+        .grid-2 {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .grid-3 {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+        }
+
+        /* Tables */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1.5rem 0;
+            background-color: var(--bg-secondary);
+        }
+
+        th, td {
+            padding: 0.75rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+
+        th {
+            background-color: var(--bg-tertiary);
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        /* Code Blocks */
+        code {
+            background-color: var(--code-bg);
+            padding: 0.125rem 0.25rem;
+            border-radius: 0.25rem;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 0.875rem;
+        }
+
+        .code-block {
+            background-color: var(--code-bg);
+            padding: 1rem;
+            border-radius: 0.375rem;
+            overflow-x: auto;
+            margin: 1rem 0;
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 0.875rem;
+        }
+
+        /* Interactive Elements */
+        .slider-container {
+            margin: 1.5rem 0;
+        }
+
+        .slider-label {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.5rem;
+            color: var(--text-secondary);
+        }
+
+        input[type="range"] {
+            width: 100%;
+            height: 0.375rem;
+            border-radius: 0.1875rem;
+            background: var(--bg-tertiary);
+            outline: none;
+            -webkit-appearance: none;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 1.25rem;
+            height: 1.25rem;
+            border-radius: 0.375rem;
+            background: var(--accent);
+            cursor: pointer;
+        }
+
+        input[type="range"]::-moz-range-thumb {
+            width: 1.25rem;
+            height: 1.25rem;
+            border-radius: 0.375rem;
+            background: var(--accent);
+            cursor: pointer;
+            border: none;
+        }
+        .toggle-container {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin: 1rem 0;
+        }
+
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 50px;
+            height: 26px;
+            background-color: #ccc;
+            border-radius: 26px;
+            cursor: pointer;
+            user-select: none;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            transition: background-color 0.3s ease;
+        }
+
+        .toggle-switch.active {
+            background-color: #4361ee;
+        }
+
+        .toggle-slider {
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 22px;
+            height: 22px;
+            background-color: white;
+            border-radius: 50%;
+            transition: transform 0.3s ease, left 0.3s ease;
+            pointer-events: none;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            will-change: transform;
+        }
+
+        .toggle-switch.active .toggle-slider {
+            transform: translateX(24px) !important;
+            left: 2px !important;
+        }
+button {
+            background-color: var(--accent);
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 0.375rem;
+            cursor: pointer;
+            font-size: 0.875rem;
+            transition: background-color 0.2s;
+        }
+
+        button:hover {
+            background-color: var(--accent-hover);
+        }
+
+        button:disabled {
+            background-color: var(--text-tertiary);
+            cursor: not-allowed;
+        }
+
+        .button-secondary {
+            background-color: var(--bg-tertiary);
+            color: var(--text-primary);
+        }
+
+        .button-secondary:hover {
+            background-color: var(--border);
+        }
+        /* Charts */
+        .chart-container {
+            width: 100%;
+            min-height: 300px;
+            margin: 1.5rem 0;
+            background-color: var(--bg-secondary);
+            border-radius: 0.5rem;
+            padding: 1rem;
+            overflow: hidden;
+        }
+/* Utility Classes */
+        .text-center { text-align: center; }
+        .text-right { text-align: right; }
+        .mt-1 { margin-top: 0.25rem; }
+        .mt-2 { margin-top: 0.5rem; }
+        .mt-3 { margin-top: 0.75rem; }
+        .mt-4 { margin-top: 1rem; }
+        .mb-1 { margin-bottom: 0.25rem; }
+        .mb-2 { margin-bottom: 0.5rem; }
+        .mb-3 { margin-bottom: 0.75rem; }
+        .mb-4 { margin-bottom: 1rem; }
+        .p-1 { padding: 0.25rem; }
+        .p-2 { padding: 0.5rem; }
+        .p-3 { padding: 0.75rem; }
+        .p-4 { padding: 1rem; }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .nav-container {
+                flex-direction: column;
+                gap: 1rem;
+            }
+
+            .container {
+                padding: 1rem;
+            }
+
+            .page-title {
+                font-size: 1.5rem;
+            }
+
+            .grid-2, .grid-3 {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* SVG Styles */
+        .svg-diagram {
+            width: 100%;
+            height: auto;
+            max-width: 800px;
+            margin: 1rem auto;
+            display: block;
+        }
+
+        .focus-visible {
+            outline: 2px solid var(--accent);
+            outline-offset: 2px;
+        }
+    </style>
+</head>
+<body>
+    <nav role="navigation" aria-label="Main navigation">
+        <div class="nav-container">
+            <div class="nav-brand">Quantization Explorer 🎯</div>
+            <div class="nav-menu" role="tablist">
+                <button class="nav-item active" data-page="home" role="tab" aria-selected="true">Home</button>
+                <button class="nav-item" data-page="transformers" role="tab" aria-selected="false">Transformers</button>
+                <button class="nav-item" data-page="weights-activations" role="tab" aria-selected="false">Weights & Activations</button>
+                <button class="nav-item" data-page="basics" role="tab" aria-selected="false">Quantization Basics</button>
+                <button class="nav-item" data-page="categories" role="tab" aria-selected="false">Categories</button>
+                <button class="nav-item" data-page="methods" role="tab" aria-selected="false">Methods</button>
+                <button class="nav-item" data-page="playgrounds" role="tab" aria-selected="false">Playgrounds</button>
+                <button class="nav-item" data-page="lab" role="tab" aria-selected="false">Mini Lab</button>
+                <button class="nav-item" data-page="performance" role="tab" aria-selected="false">Performance</button>
+                <button class="nav-item" data-page="glossary" role="tab" aria-selected="false">Glossary</button>
+                <button class="nav-item" data-page="references" role="tab" aria-selected="false">References</button>
+            </div>
+            <button class="theme-toggle" aria-label="Toggle theme">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="5"></circle>
+                    <line x1="12" y1="1" x2="12" y2="3"></line>
+                    <line x1="12" y1="21" x2="12" y2="23"></line>
+                    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                    <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                    <line x1="1" y1="12" x2="3" y2="12"></line>
+                    <line x1="21" y1="12" x2="23" y2="12"></line>
+                    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                    <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                </svg>
+            </button>
+        </div>
+    </nav>
+
+    <div class="container">
+        <!-- Home Page -->
+        <section id="home" class="page active" role="tabpanel">
+            <header class="page-header">
+                <h1 class="page-title">Understanding Model Quantization</h1>
+                <p class="page-subtitle">Making large language models smaller, faster, and more accessible</p>
+            </header>
+
+            <div class="card">
+                <h2 class="card-title">The Challenge: Models Are Massive</h2>
+                <p>Modern LLMs require gigabytes of memory just to store their parameters. A 7B parameter model at FP16 needs 14GB, while a 175B model needs 350GB. This creates barriers for deployment, especially on edge devices and in memory-constrained environments.</p>
+                <p>Quantization reduces memory usage by representing weights and activations with fewer bits, trading some precision for dramatic memory savings.</p>
+            </div>
+            <div class="card">
+                <h2 class="card-title">Model Memory Requirements by Precision</h2>
+                <div class="chart-container" style="height: 400px; margin: 1.5rem 0;">
+                    <svg id="memoryChart" class="svg-diagram" viewBox="0 0 800 400">
+                        <!-- Memory chart will be drawn here -->
+                    </svg>
+                </div>
+            </div>
+
+            <div class="card" style="margin-top: 2rem;">
+                <h2 class="card-title">Key Takeaway</h2>
+                <p><strong>Quantization converts floating-point numbers to lower-precision integers, cutting memory requirements by 2-4x while maintaining model quality with specialized techniques.</strong></p>
+                <p>By quantizing from FP16 (16 bits) to INT8 (8 bits) or even INT4 (4 bits), we can fit larger models on the same hardware and often achieve faster inference through specialized integer arithmetic.</p>
+            </div>
+</section>
+
+        <!-- Transformers Page -->
+        <section id="transformers" class="page" role="tabpanel">
+            <header class="page-header">
+                <h1 class="page-title">How Transformers Work</h1>
+                <p class="page-subtitle">The architecture behind modern language models</p>
+            </header>
+
+            <div class="card">
+                <h2 class="card-title">Transformer Layers</h2>
+                <p>Transformer models stack identical layers, each containing:</p>
+                <ul style="margin-left: 1.5rem; margin-top: 0.5rem;">
+                    <li><strong>Multi-Head Attention:</strong> Computes relationships between tokens</li>
+                    <li><strong>Feed-Forward Network (MLP):strong> Processes each token independently</li>
+                    <li><strong>Layer Normalization:</strong> Stabilizes training and inference</li>
+                    <li><strong>Residual Connections:</strong> Preserve information flow</li>
+                </ul>
+            </div>
+
+            <svg class="svg-diagram" viewBox="0 0 800 600">
+                <!-- Transformer block diagram -->
+                <defs>
+                    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                        <polygon points="0 0, 10 3.5, 0 7" fill="#4361ee" />
+                    </marker>
+                </defs>
+                
+                <!-- Input -->
+                <rect x="350" y="30" width="100" height="40" fill="#e9ecef" stroke="#4361ee" stroke-width="2"/>
+                <text x="400" y="55" text-anchor="middle" font-size="14" fill="#212529">Input</text>
+                
+                <!-- Arrow -->
+                <line x1="400" y1="70" x2="400" y2="100" stroke="#4361ee" stroke-width="2" marker-end="url(#arrowhead)"/>
+                
+                <!-- Attention Block -->
+                <rect x="300" y="100" width="200" height="80" fill="#e7f5ff" stroke="#4361ee" stroke-width="2"/>
+                <text x="400" y="125" text-anchor="middle" font-size="14" font-weight="bold" fill="#212529">Multi-Head Attention</text>
+                <text x="400" y="145" text-anchor="middle" font-size="12" fill="#495057">Weights: Q, K, V, O</text>
+                <text x="400" y="165" text-anchor="middle" font-size="12" fill="#495057">Activations: attention scores</text>
+                
+                <!-- Add & Norm -->
+                <rect x="300" y="200" width="200" height="50" fill="#e9ecef" stroke="#4361ee" stroke-width="2"/>
+                <text x="400" y="230" text-anchor="middle" font-size="14" fill="#212529">Add & LayerNorm</text>
+                
+                <!-- MLP Block -->
+                <rect x="300" y="270" width="200" height="80" fill="#fff5f5" stroke="#e03131" stroke-width="2"/>
+                <text x="400" y="295" text-anchor="middle" font-size="14" font-weight="bold" fill="#212529">Feed-Forward Network</text>
+                <text x="400" y="315" text-anchor="middle" font-size="12" fill="#495057">Weights: W1, W2</text>
+                <text x="400" y="335" text-anchor="middle" font-size="12" fill="#495057">Activations: hidden states</text>
+                
+                <!-- Add & Norm 2 -->
+                <rect x="300" y="370" width="200" height="50" fill="#e9ecef" stroke="#4361ee" stroke-width="2"/>
+                <text x="400" y="400" text-anchor="middle" font-size="14" fill="#212529">Add & LayerNorm</text>
+                
+                <!-- Output -->
+                <rect x="350" y="450" width="100" height="40" fill="#e9ecef" stroke="#4361ee" stroke-width="2"/>
+                <text x="400" y="475" text-anchor="middle" font-size="14" fill="#212529">Output</text>
+                
+                <!-- Connecting arrows -->
+                <line x1="400" y1="180" x2="400" y2="200" stroke="#4361ee" stroke-width="2" marker-end="url(#arrowhead)"/>
+                <line x1="400" y1="250" x2="400" y2="270" stroke="#4361ee" stroke-width="2" marker-end="url(#arrowhead)"/>
+                <line x1="400" y1="350" x2="400" y2="370" stroke="#4361ee" stroke-width="2" marker-end="url(#arrowhead)"/>
+                <line x1="400" y1="420" x2="400" y2="450" stroke="#4361ee" stroke-width="2" marker-end="url(#arrowhead)"/>
+                
+                <!-- Residual connections -->
+                <path d="M 300 140 Q 250 280 300 395" stroke="#2f9e44" stroke-width="2" fill="none" stroke-dasharray="5,5"/>
+                <path d="M 300 225 Q 250 335 300 395" stroke="#2f9e44" stroke-width="2" fill="none" stroke-dasharray="5,5"/>
+                <text x="220" y="280" font-size="12" fill="#2f9e44">Residual</text>
+                
+                <!-- KV Cache note -->
+                <rect x="550" y="120" width="180" height="60" fill="#fff3cd" stroke="#f59f00" stroke-width="2"/>
+                <text x="640" y="145" text-anchor="middle" font-size="13" font-weight="bold" fill="#212529">KV Cache</text>
+                <text x="640" y="165" text-anchor="middle" font-size="11" fill="#495057">Stores K, V for all tokens</text>
+            </svg>
+
+            <div class="card">
+                <h2 class="card-title">KV Cache Growth</h2>
+                <p>During inference, the attention mechanism stores Key and Value vectors for all previously generated tokens in a KV cache. For sequence length <code>L</code> and hidden dimension <code>H</code>, the cache requires <code>2 × L × H</code> values.</p>
+                <p>At INT8, a 2048-token sequence with 4096-dim embeddings needs 16MB of KV cache per layer—significant memory that benefits from quantization.</p>
+                <button class="button-secondary" style="margin-top: 1rem;" onclick="navigateToPage('playgrounds'); setTimeout(() => document.getElementById('playground-kvcache').scrollIntoView({behavior: 'smooth'}), 200);">Try in Playground →</button>
+            </div>
+        </section>
+
+        <!-- Weights & Activations Page -->
+        <section id="weights-activations" class="page" role="tabpanel">
+            <header class="page-header">
+                <h1 class="page-title">Weights, Activations, and KV Cache</h1>
+                <p class="page-subtitle">The core components of neural networks</p>
+            </header>
+
+            <div class="card">
+                <h2 class="card-title">Definitions</h2>
+                <div class="grid-2" style="margin-top: 1rem;">
+                    <div>
+                        <h3 style="color: var(--accent); margin-bottom: 0.5rem;">Weights</h3>
+                        <p>Fixed parameters learned during training. In a Linear layer <code>y = Wx + b</code>, <code>W</code> are the weights. Typically range from -2 to 2 after normalization.</p>
+                    </div>
+                    <div>
+                        <h3 style="color: var(--accent); margin-bottom: 0.5rem;">Activations</h3>
+                        <p>Dynamic values flowing through the network during inference. These are intermediate outputs between layers. Range can vary widely, with outliers requiring special handling.</p>
+                    </div>
+                    <div>
+                        <h3 style="color: var(--accent); margin-bottom: 0.5rem;">KV Cache</h3>
+                        <p>Stores Key and Value vectors from attention layers for efficient autoregressive generation. Grows linearly with sequence length. Typically bounded values but can have outliers.</p>
+                    </div>
+                    <div>
+                        <h3 style="color: var(--accent); margin-bottom: 0.5rem;">Biases</h3>
+                        <p>Additive parameters in Linear layers. Usually small in magnitude (often < 1) and sometimes omitted in modern architectures for simplicity.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2 class="card-title">Comparison Table</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Component</th>
+                            <th>Role</th>
+                            <th>Typical Range</th>
+                            <th>Quantization Challenge</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>Weights</strong></td>
+                            <td>Fixed transformations</td>
+                            <td>[-2, 2] (normalized)</td>
+                            <td>Per-channel variation</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Activations</strong></td>
+                            <td>Dynamic data flow</td>
+                            <td>[-6, 6] with outliers</td>
+                            <td>Outliers and per-token variation</td>
+                        </tr>
+                        <tr>
+                            <td><strong>KV Cache</strong></td>
+                            <td>Attention memory</td>
+                            <td>[-3, 3]</td>
+                            <td>Sequence-dependent scaling</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="card">
+                <h2 class="card-title">Linear Layer Example</h2>
+                <p>Consider a simple Linear layer: <code>y = Wx + b</code></p>
+                <div class="code-block">
+W = [[ 0.5, -0.3],
+     [ 1.2,  0.8]]  // 2x2 weight matrix
+     
+x = [0.7, -1.5]     // Input vector
+b = [0.1, -0.2]     // Bias vector
+
+y = Wx + b
+  = [0.5*0.7 + (-0.3)*(-1.5) + 0.1, 1.2*0.7 + 0.8*(-1.5) + (-0.2)]
+  = [0.35 + 0.45 + 0.1, 0.84 - 1.2 - 0.2]
+  = [0.90, -0.56]   // Output vector
+                </div>
+                <p>This tiny example shows how weights (W) transform inputs (x) through matrix multiplication, with biases (b) adding an offset. At scale, LLMs perform billions of such operations.</p>
+            </div>
+        </section>
+
+        <!-- Quantization Basics Page -->
+        <section id="basics" class="page" role="tabpanel">
+            <header class="page-header">
+                <h1 class="page-title">Quantization Basics</h1>
+                <p class="page-subtitle">Understanding the fundamentals of numerical precision reduction</p>
+            </header>
+
+            <div class="card">
+                <h2 class="card-title">Core Concepts</h2>
+                <div class="grid-2">
+                    <div>
+                        <h3 style="color: var(--accent);">Bit-width</h3>
+                        <p>Number of bits used to represent each number. Fewer bits = less precision but more memory savings.</p>
+                        <ul style="margin-left: 1rem; margin-top: 0.5rem;">
+                            <li>FP32: 32 bits (full precision)</li>
+                            <li>FP16: 16 bits (half precision)</li>
+                            <li>INT8: 8 bits (integer)</li>
+                            <li>INT4: 4 bits (extreme quantization)</li>
+                        </ul>
+                    </div>
+                    <div>
+                        <h3 style="color: var(--accent);">Scale & Zero-point</h3>
+                        <p>Map between floating-point and integer ranges:</p>
+                        <div class="code-block">
+Scale (s) = (max_fp - min_fp) / (max_int - min_int)
+Zero-point (zp) = round(min_fp / s) - min_int
+                        </div>
+                        <p>These parameters enable reversible conversion between precisions.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2 class="card-title">Quantization Types</h2>
+                <div class="grid-3">
+                    <div>
+                        <h4 style="color: var(--accent); margin-bottom: 0.5rem;">Symmetric</h4>
+                        <p>Zero-point is 0. Range is [-127, 127] for INT8. Simpler but may not use full range optimally.</p>
+                    </div>
+                    <div>
+                        <h4 style="color: var(--accent); margin-bottom: 0.5rem;">Asymmetric</h4>
+                        <p>Non-zero zero-point allows better range utilization. Range is [0, 255] for UINT8.</p>
+                    </div>
+                    <div>
+                        <h4 style="color: var(--accent); margin-bottom: 0.5rem;">Granularity</h4>
+                        <p><strong>Per-tensor:</strong> One scale for all values</p>
+                        <p><strong>Per-channel:</strong> Separate scale per output channel</p>
+                        <p><strong>Per-group:</strong> Groups of channels share scales</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2 class="card-title">Quantization Formula</h2>
+                <div class="code-block">
+Quantization:   q = round(y / scale) + zero_point
+Dequantization: y ≈ (q - zero_point) × scale
+                </div>
+                <p>The <code>round</code> operation introduces quantization error. Better scale selection minimizes this error.</p>
+            </div>
+
+            <div class="card">
+                <h2 class="card-title">Interactive Demo</h2>
+                <p>Adjust the bit-width to see how quantization affects a sample vector:</p>
+                
+                <div class="slider-container">
+                    <div class="slider-label">
+                        <span>Bit-width:</span>
+                        <span id="bitWidthValue">4 bits</span>
+                    </div>
+                    <input type="range" id="bitWidthSlider" min="2" max="8" value="4" step="1">
+                </div>
+            <div class="toggle-container">
+                <span>Symmetric:</span>
+                <div class="toggle-switch active" id="symmetricToggle">
+                    <div class="toggle-slider"></div>
+                </div>
+            </div>
+<div class="grid-2">
+                    <div>
+                        <h4 style="margin-bottom: 0.5rem;">Original (FP16)</h4>
+                        <div class="code-block" id="originalVector">[0.15, -0.32, 0.87, -1.23, 2.45]</div>
+                    </div>
+                    <div>
+                        <h4 style="margin-bottom: 0.5rem;">Quantized & Dequantized</h4>
+                        <div class="code-block" id="quantizedVector">Loading...</div>
+                    </div>
+                </div>
+
+                <div style="margin-top: 1rem;">
+                    <h4 style="margin-bottom: 0.5rem;">Quantization Error (MSE)</h4>
+                    <div class="code-block" id="quantizationError">Calculating...</div>
+                </div>
+
+                <div class="chart-container">
+                    <svg id="errorChart" class="svg-diagram" viewBox="0 0 800 300">
+                        <!-- Error visualization will be drawn here -->
+                    </svg>
+                </div>
+            </div>
+        </section>
+
+        <!-- Categories Page -->
+        <section id="categories" class="page" role="tabpanel">
+            <header class="page-header">
+                <h1 class="page-title">Categories of Quantization Techniques</h1>
+                <p class="page-subtitle">Understanding the landscape of quantization approaches</p>
+            </header>
+
+            <div class="card">
+                <h2 class="card-title">When Applied</h2>
+                <div class="grid-3">
+                    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 1.5rem; border-radius: 0.5rem;">
+                        <h3 style="margin-bottom: 0.5rem;">Post-Training Quantization (PTQ)</h3>
+                        <p>Quantize already-trained models without retraining. Fast but may lose accuracy at very low bit-widths.</p>
+                    </div>
+                    <div style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white; padding: 1.5rem; border-radius: 0.5rem;">
+                        <h3 style="margin-bottom: 0.5rem;">Quantization-Aware Training (QAT)</h3>
+                        <p>Simulate quantization during training. Better accuracy but requires access to training pipeline.</p>
+                    </div>
+                    <div style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); color: white; padding: 1.5rem; border-radius: 0.5rem;">
+                        <h3 style="margin-bottom: 0.5rem;">Hybrid Small-Update</h3>
+                        <p>PTQ with brief fine-tuning. Balances speed and accuracy for most practical scenarios.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2 class="card-title">What Is Quantized</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Target</th>
+                            <th>Description</th>
+                            <th>Benefits</th>
+                            <th>Challenges</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>Weight-only</strong></td>
+                            <td>Only model weights quantized, activations remain FP16</td>
+                            <td>Easy to implement, good memory savings</td>
+                            <td>Limited speedup, mixed precision overhead</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Weights + Activations</strong></td>
+                            <td>Both weights and activations quantized</td>
+                            <td>Maximum speedup, significant memory savings</td>
+                            <td>Activation outliers, accuracy drops</td>
+                        </tr>
+                        <tr>
+                            <td><strong>KV Cache</strong></td>
+                            <td>Only attention cache quantized</td>
+                            <td>Reduces memory for long sequences</td>
+                            <td>Affects generation quality gradually</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Low-bit Finetuning</strong></td>
+                            <td>Special formats like NF4 for efficient updates</td>
+                            <td>Enables large model adaptation</td>
+                            <td>Requires custom kernels</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="card">
+                <h2 class="card-title">How It Works</h2>
+                <div class="grid-2">
+                    <div>
+                        <h3 style="color: var(--accent); margin-bottom: 0.5rem;">Uniform Methods</h3>
+                        <ul style="margin-left: 1rem;">
+                            <li><strong>Standard INT quantization:</strong> Linear mapping between FP and INT</li>
+                            <li><strong>Activation-aware scaling:</strong> Different scales for activation stats</li>
+                            <li><strong>Rotations:</strong> Pre-process weights to reduce outliers</li>
+                        </ul>
+                    </div>
+                    <div>
+                        <h3 style="color: var(--accent); margin-bottom: 0.5rem;">Non-uniform Methods</h3>
+                        <ul style="margin-left: 1rem;">
+                            <li><strong>Codebooks:</strong> Vector quantization with learned centroids</li>
+                            <li><strong>Per-vector schemes:</strong> Individual scales per vector</li>
+                            <li><strong>Sparse + Quant:</strong> Combine sparsity with quantization</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2 class="card-title">Technique Taxonomy</h2>
+                <svg class="svg-diagram" viewBox="0 0 900 600">
+                    <!-- Taxonomy diagram -->
+                    <defs>
+                        <marker id="arrow" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                            <polygon points="0 0, 10 3.5, 0 7" fill="#4361ee"/>
+                        </marker>
+                    </defs>
+                    
+                    <!-- Root -->
+                    <rect x="350" y="20" width="200" height="50" fill="#4361ee" rx="5"/>
+                    <text x="450" y="50" text-anchor="middle" fill="white" font-size="14" font-weight="bold">Quantization</text>
+                    
+                    <!-- Level 1 -->
+                    <rect x="50" y="120" width="150" height="40" fill="#e7f5ff" stroke="#4361ee" stroke-width="2" rx="5"/>
+                    <text x="125" y="145" text-anchor="middle" font-size="13">PTQ</text>
+                    
+                    <rect x="250" y="120" width="150" height="40" fill="#e7f5ff" stroke="#4361ee" stroke-width="2" rx="5"/>
+                    <text x="325" y="145" text-anchor="middle" font-size="13">QAT</text>
+                    
+                    <rect x="450" y="120" width="150" height="40" fill="#e7f5ff" stroke="#4361ee" stroke-width="2" rx="5"/>
+                    <text x="525" y="145" text-anchor="middle" font-size="13">Hybrid</text>
+                    
+                    <rect x="650" y="120" width="150" height="40" fill="#e7f5ff" stroke="#4361ee" stroke-width="2" rx="5"/>
+                    <text x="725" y="145" text-anchor="middle" font-size="13">Fine-tuning</text>
+                    
+                    <!-- Level 2 -->
+                    <rect x="20" y="220" width="120" height="35" fill="#fff5f5" stroke="#e03131" stroke-width="1" rx="3"/>
+                    <text x="80" y="242" text-anchor="middle" font-size="11">GPTQ</text>
+                    
+                    <rect x="160" y="220" width="120" height="35" fill="#fff5f5" stroke="#e03131" stroke-width="1" rx="3"/>
+                    <text x="220" y="242" text-anchor="middle" font-size="11">AWQ</text>
+                    
+                    <rect x="290" y="220" width="120" height="35" fill="#f0fdf4" stroke="#2f9e44" stroke-width="1" rx="3"/>
+                    <text x="350" y="242" text-anchor="middle" font-size="11">SmoothQuant</text>
+                    
+                    <rect x="430" y="220" width="120" height="35" fill="#f0fdf4" stroke="#2f9e44" stroke-width="1" rx="3"/>
+                    <text x="490" y="242" text-anchor="middle" font-size="11">ZeroQuant</text>
+                    
+                    <rect x="620" y="220" width="120" height="35" fill="#fef3c7" stroke="#f59f00" stroke-width="1" rx="3"/>
+                    <text x="680" y="242" text-anchor="middle" font-size="11">QLoRA</text>
+                    
+                    <rect x="760" y="220" width="120" height="35" fill="#fef3c7" stroke="#f59f00" stroke-width="1" rx="3"/>
+                    <text x="820" y="242" text-anchor="middle" font-size="11">LoRA-Q</text>
+                    
+                    <!-- Level 3 -->
+                    <text x="80" y="290" text-anchor="middle" font-size="10" fill="#6c757d">INT4/INT8</text>
+                    <text x="220" y="290" text-anchor="middle" font-size="10" fill="#6c757d">Activation-aware</text>
+                    <text x="350" y="290" text-anchor="middle" font-size="10" fill="#6c757d">Smoothing</text>
+                    <text x="490" y="290" text-anchor="middle" font-size="10" fill="#6c757d">Zero-shot</text>
+                    <text x="680" y="290" text-anchor="middle" font-size="10" fill="#6c757d">NF4 format</text>
+                    <text x="820" y="290" text-anchor="middle" font-size="10" fill="#6c757d">Efficient</text>
+                    
+                    <!-- Arrows -->
+                    <line x1="450" y1="70" x2="125" y2="120" stroke="#4361ee" stroke-width="2" marker-end="url(#arrow)"/>
+                    <line x1="450" y1="70" x2="325" y2="120" stroke="#4361ee" stroke-width="2" marker-end="url(#arrow)"/>
+                    <line x1="450" y1="70" x2="525" y2="120" stroke="#4361ee" stroke-width="2" marker-end="url(#arrow)"/>
+                    <line x1="450" y1="70" x2="725" y2="120" stroke="#4361ee" stroke-width="2" marker-end="url(#arrow)"/>
+                    
+                    <line x1="125" y1="160" x2="80" y2="220" stroke="#4361ee" stroke-width="1" marker-end="url(#arrow)"/>
+                    <line x1="125" y1="160" x2="220" y2="220" stroke="#4361ee" stroke-width="1" marker-end="url(#arrow)"/>
+                    <line x1="325" y1="160" x2="350" y2="220" stroke="#4361ee" stroke-width="1" marker-end="url(#arrow)"/>
+                    <line x1="525" y1="160" x2="490" y2="220" stroke="#4361ee" stroke-width="1" marker-end="url(#arrow)"/>
+                    <line x1="725" y1="160" x2="680" y2="220" stroke="#4361ee" stroke-width="1" marker-end="url(#arrow)"/>
+                    <line x1="725" y1="160" x2="820" y2="220" stroke="#4361ee" stroke-width="1" marker-end="url(#arrow)"/>
+                </svg>
+            </div>
+        </section>
+
+        <!-- Methods Page -->
+        <section id="methods" class="page" role="tabpanel">
+            <header class="page-header">
+                <h1 class="page-title">Quantization Methods in Practice</h1>
+                <p class="page-subtitle">Practical techniques and their tradeoffs</p>
+            </header>
+
+            <div class="grid-2">
+                <div class="card">
+                    <h2 class="card-title">GPTQ</h2>
+                    <p><strong>What:</strong> Post-training quantization using optimal brain surgeon approach</p>
+                    <p><strong>Targets:</strong> Weights (INT4/INT8)</p>
+                    <p><strong>Why helps:</strong> Minimizes quantization error layer by layer</p>
+                    <p><strong>Tradeoffs:</strong> Slow quantization time, may need calibration data</p>
+                    <button class="button-secondary" style="margin-top: 1rem;" onclick="navigateToPage('playgrounds'); setTimeout(() => document.getElementById('playground-gptq').scrollIntoView({behavior: 'smooth'}), 200);">Try in Playground →</button>
+                </div>
+
+                <div class="card">
+                    <h2 class="card-title">AWQ</h2>
+                    <p><strong>What:</strong> Activation-aware weight quantization</p>
+                    <p><strong>Targets:</strong> Weights (INT4) based on activation importance</p>
+                    <p><strong>Why helps:</strong> Protects salient weights with higher precision</p>
+                    <p><strong>Tradeoffs:</strong> Requires activation statistics, mixed precision overhead</p>
+                    <button class="button-secondary" style="margin-top: 1rem;" onclick="navigateToPage('playgrounds'); setTimeout(() => document.getElementById('playground-awq').scrollIntoView({behavior: 'smooth'}), 200);">Try in Playground →</button>
+                </div>
+
+                <div class="card">
+                    <h2 class="card-title">SmoothQuant</h2>
+                    <p><strong>What:</strong> Smoothes activation distributions to reduce outliers</p>
+                    <p><strong>Targets:</strong> Weights + Activations (INT8)</p>
+                    <p><strong>Why helps:</strong> Balances quantization difficulty between weights and activations</p>
+                    <p><strong>Tradeoffs:</strong> Requires calibration pass, slight accuracy variance</p>
+                    <button class="button-secondary" style="margin-top: 1rem;" onclick="navigateToPage('playgrounds'); setTimeout(() => document.getElementById('playground-smoothquant').scrollIntoView({behavior: 'smooth'}), 200);">Try in Playground →</button>
+                </div>
+
+                <div class="card">
+                    <h2 class="card-title">ZeroQuant</h2>
+                    <p><strong>What:</strong> Zero-shot quantization without calibration</p>
+                    <p><strong>Targets:</strong> Weights + Activations (INT8)</p>
+                    <p><strong>Why helps:</strong> Works out-of-the-box without data</p>
+                    <p><strong>Tradeoffs:</strong> May underperform data-dependent methods</p>
+                </div>
+
+                <div class="card">
+                    <h2 class="card-title">LLM.int8()</h2>
+                    <p><strong>What:</strong> Mixed precision with outlier handling</p>
+                    <p><strong>Targets:</strong> Weights (FP16 for outliers, INT8 for rest)</p>
+                    <p><strong>Why helps:</strong> Preserves accuracy while quantizing most weights</p>
+                    <p><strong>Tradeoffs:</strong> Requires runtime outlier detection, partial speedup</p>
+                    <button class="button-secondary" style="margin-top: 1rem;" onclick="navigateToPage('playgrounds'); setTimeout(() => document.getElementById('playground-llmint8').scrollIntoView({behavior: 'smooth'}), 200);">Try in Playground →</button>
+                </div>
+
+                <div class="card">
+                    <h2 class="card-title">QuaRot</h2>
+                    <p><strong>What:</strong> Quantization with rotation transformations</p>
+                    <p><strong>Targets:</strong> Weights + Activations (INT4/INT8)</p>
+                    <p><strong>Why helps:</strong> Reduces outlier impact through Hadamard rotations</p>
+                    <p><strong>Tradeoffs:</strong> Additional compute for rotations, kernel complexity</p>
+                </div>
+
+                <div class="card">
+                    <h2 class="card-title">QLoRA (NF4)</h2>
+                    <p><strong>What:</strong> Low-rank adaptation with 4-bit normal float</p>
+                    <p><strong>Targets:</strong> Adapter weights in NF4, base model frozen</p>
+                    <p><strong>Why helps:</strong> Enables fine-tuning large models on single GPU</p>
+                    <p><strong>Tradeoffs:</strong> Only for fine-tuning, not inference acceleration</p>
+                    <button class="button-secondary" style="margin-top: 1rem;" onclick="navigateToPage('playgrounds'); setTimeout(() => document.getElementById('playground-qlora').scrollIntoView({behavior: 'smooth'}), 200);">Try in Playground →</button>
+                </div>
+
+                <div class="card">
+                    <h2 class="card-title">KV-Quant Schemes</h2>
+                    <p><strong>What:</strong> Quantize attention cache separately</p>
+                    <p><strong>Targets:</strong> KV Cache (INT8/INT4)</p>
+                    <p><strong>Why helps:</strong> Reduces memory for long context generation</p>
+                    <p><strong>Tradeoffs:</strong> Quality degrades with very low bits, per-channel overhead</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Mini Lab Page -->
+        <section id="lab" class="page" role="tabpanel">
+            <header class="page-header">
+                <h1 class="page-title">Hands-on Mini Lab</h1>
+                <p class="page-subtitle">Experiment with quantization parameters in real-time</p>
+            </header>
+
+            <div class="card">
+                <h2 class="card-title">Linear Layer Quantization Lab</h2>
+                <p>Configure quantization settings and observe the impact on memory and accuracy:</p>
+                
+                <div class="grid-2">
+                    <div>
+                        <h3 style="margin-bottom: 1rem;">Configuration</h3>
+                        
+                        <div class="slider-container">
+                            <div class="slider-label">
+                                <span>Weight Bits:</span>
+                                <span id="weightBitsValue">8</span>
+                            </div>
+                            <input type="range" id="weightBitsSlider" min="2" max="8" value="8">
+                        </div>
+
+                        <div class="slider-container">
+                            <div class="slider-label">
+                                <span>Activation Bits:</span>
+                                <span id="activationBitsValue">8</span>
+                            </div>
+                            <input type="range" id="activationBitsSlider" min="2" max="8" value="8">
+                        </div>
+
+                        <div class="toggle-container">
+                            <span>Per-Channel Scaling:</span>
+                            <div class="toggle-switch" id="perChannelToggle">
+                                <div class="toggle-slider"></div>
+                            </div>
+                        </div>
+
+                        <div class="toggle-container">
+                            <span>Outlier Protection (LLM.int8 style):</span>
+                            <div class="toggle-switch" id="outlierToggle">
+                                <div class="toggle-slider"></div>
+                            </div>
+                        </div>
+
+                        <button id="resetLab" class="button-secondary" style="margin-top: 1rem;">Reset</button>
+                    </div>
+
+                    <div>
+                        <h3 style="margin-bottom: 1rem;">Metrics</h3>
+                        <div class="code-block">
+Memory Estimate: <span id="memoryEstimate">Calculating...</span> MB
+MSE Error: <span id="mseError">Calculating...</span>
+                        </div>
+                        <canvas id="errorBarChart" width="400" height="200" style="width: 100%; margin-top: 1rem;"></canvas>
+                    </div>
+                </div>
+
+                <div style="margin-top: 2rem;">
+                    <h3 style="margin-bottom: 1rem;">Sample Linear Layer</h3>
+                    <div class="code-block" id="layerExample">Loading example...</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Performance Page -->
+        <section id="performance" class="page" role="tabpanel">
+            <header class="page-header">
+                <h1 class="page-title">Performance and Tradeoffs</h1>
+                <p class="page-subtitle">Understanding the practical implications of quantization</p>
+            </header>
+
+            <div class="card">
+                <h2 class="card-title">Memory vs Speed vs Quality</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Bit-width</th>
+                            <th>Memory Reduction</th>
+                            <th>Speed Improvement</th>
+                            <th>Quality Impact</th>
+                            <th>Best For</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>FP16 (16 bits)</strong></td>
+                            <td>2x vs FP32</td>
+                            <td>1.5-2x</td>
+                            <td>Minimal</td>
+                            <td>General use, GPUs with tensor cores</td>
+                        </tr>
+                        <tr>
+                            <td><strong>INT8 (8 bits)</strong></td>
+                            <td>4x vs FP32</td>
+                            <td>2-4x</td>
+                            <td>Small to moderate</td>
+                            <td>Edge devices, CPUs, inference servers</td>
+                        </tr>
+                        <tr>
+                            <td><strong>INT4 (4 bits)</strong></td>
+                            <td>8x vs FP32</td>
+                            <td>3-6x (with optimization)</td>
+                            <td>Moderate to significant</td>
+                            <td>Memory-constrained deployment</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Mixed Precision</strong></td>
+                            <td>2-6x</td>
+                            <td>1.5-3x</td>
+                            <td>Minimal to small</td>
+                            <td>Balance of quality and efficiency</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="card">
+                <h2 class="card-title">Speedup Considerations</h2>
+                <div class="grid-2">
+                    <div>
+                        <h3 style="color: var(--success); margin-bottom: 0.5rem;">Where Speedups Appear</h3>
+                        <ul style="margin-left: 1rem;">
+                            <li>Matrix multiplication with SIMD instructions</li>
+                            <li>Reduced memory bandwidth requirements</li>
+                            <li>Better cache utilization</li>
+                            <li>Specialized hardware (NPUs, TPUs)</li>
+                        </ul>
+                    </div>
+                    <div>
+                        <h3 style="color: var(--error); margin-bottom: 0.5rem;">Where Speedups Don't Appear</h3>
+                        <ul style="margin-left: 1rem;">
+                            <li>Memory-bound operations (embedding lookups)</li>
+                            <li>Small batch sizes on GPUs</li>
+                            <li>Operations without optimized kernels</li>
+                            <li>Dequantization overhead in mixed precision</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2 class="card-title">KV Cache Savings</h2>
+                <p>For long sequences, KV cache quantization provides significant memory savings:</p>
+                <div class="code-block">
+Sequence Length: 4096 tokens
+Hidden Dimension: 4096
+Layers: 32
+
+FP16 KV Cache: 4096 × 4096 × 32 × 2 × 2 bytes = 2 GB
+INT8 KV Cache: 4096 × 4096 × 32 × 2 × 1 byte = 1 GB
+INT4 KV Cache: 4096 × 4096 × 32 × 2 × 0.5 byte = 0.5 GB
+
+Savings: INT4 uses 4x less memory than FP16
+                </div>
+            </div>
+        </section>
+
+        <!-- Glossary Page -->
+        <section id="glossary" class="page" role="tabpanel">
+            <header class="page-header">
+                <h1 class="page-title">Glossary</h1>
+                <p class="page-subtitle">Key terms in model quantization</p>
+            </header>
+
+            <div class="grid-2">
+                <div class="card">
+                    <h3 style="color: var(--accent);">Activation-aware Quantization</h3>
+                    <p>Quantization technique that considers activation statistics when determining weight quantization parameters.</p>
+                </div>
+
+                <div class="card">
+                    <h3 style="color: var(--accent);">Calibration</h3>
+                    <p>Process of collecting statistics from a small dataset to determine optimal quantization parameters.</p>
+                </div>
+
+                <div class="card">
+                    <h3 style="color: var(--accent);">Dequantization</h3>
+                    <p>Conversion from quantized integer values back to floating-point for computation.</p>
+                </div>
+
+                <div class="card">
+                    <h3 style="color: var(--accent);">INT8/INT4</h3>
+                    <p>8-bit and 4-bit integer representations used for quantized values.</p>
+                </div>
+
+                <div class="card">
+                    <h3 style="color: var(--accent);">Mixed Precision</h3>
+                    <p>Using different precisions for different parts of the model (e.g., INT4 weights, FP16 activations).</p>
+                </div>
+
+                <div class="card">
+                    <h3 style="color: var(--accent);">Outliers</h3>
+                    <p>Values far from the typical range that are difficult to quantize accurately.</p>
+                </div>
+
+                <div class="card">
+                    <h3 style="color: var(--accent);">Per-channel Quantization</h3>
+                    <p>Using separate quantization parameters for each output channel of a layer.</p>
+                </div>
+
+                <div class="card">
+                    <h3 style="color: var(--accent);">Per-tensor Quantization</h3>
+                    <p>Using a single set of quantization parameters for all values in a tensor.</p>
+                </div>
+
+                <div class="card">
+                    <h3 style="color: var(--accent);">Post-training Quantization (PTQ)</h3>
+                    <p>Quantizing a model after training without additional fine-tuning.</p>
+                </div>
+
+                <div class="card">
+                    <h3 style="color: var(--accent);">Quantization-aware Training (QAT)</h3>
+                    <p>Training process that simulates quantization effects to produce quantization-ready models.</p>
+                </div>
+
+                <div class="card">
+                    <h3 style="color: var(--accent);">Scale</h3>
+                    <p>Multiplier used to map floating-point values to integer range during quantization.</p>
+                </div>
+
+                <div class="card">
+                    <h3 style="color: var(--accent);">Zero-point</h3>
+                    <p>Offset added during quantization to handle asymmetric value distributions.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- References Page -->
+        <section id="references" class="page" role="tabpanel">
+            <header class="page-header">
+                <h1 class="page-title">References</h1>
+                <p class="page-subtitle">Further reading and resources</p>
+            </header>
+
+            <div class="card">
+                <h2 class="card-title">Essential Papers</h2>
+                <ul style="list-style: none; padding: 0;">
+                    <li style="margin-bottom: 1rem;">
+                        <a href="https://arxiv.org/abs/2210.17323" style="color: var(--accent); text-decoration: none;">
+                            <strong>GPTQ: Accurate Post-training Compression for Generative LLMs</strong>
+                        </a>
+                        <p style="margin-top: 0.25rem; color: var(--text-secondary);">Introduces layer-wise weight quantization using optimal brain surgeon</p>
+                    </li>
+                    <li style="margin-bottom: 1rem;">
+                        <a href="https://arxiv.org/abs/2306.00978" style="color: var(--accent); text-decoration: none;">
+                            <strong>AWQ: Activation-aware Weight Quantization</strong>
+                        </a>
+                        <p style="margin-top: 0.25rem; color: var(--text-secondary);">Weight quantization based on activation magnitude distribution</p>
+                    </li>
+                    <li style="margin-bottom: 1rem;">
+                        <a href="https://arxiv.org/abs/2208.07339" style="color: var(--accent); text-decoration: none;">
+                            <strong>LLM.int8(): 8-bit Matrix Multiplication for Transformers</strong>
+                        </a>
+                        <p style="margin-top: 0.25rem; color: var(--text-secondary);">Mixed precision approach handling outliers in LLMs</p>
+                    </li>
+                    <li style="margin-bottom: 1rem;">
+                        <a href="https://arxiv.org/abs/2211.10438" style="color: var(--accent); text-decoration: none;">
+                            <strong>SmoothQuant: Accurate and Efficient Post-training Quantization</strong>
+                        </a>
+                        <p style="margin-top: 0.25rem; color: var(--text-secondary);">Mathematical framework to balance quantization difficulty</p>
+                    </li>
+                    <li style="margin-bottom: 1rem;">
+                        <a href="https://arxiv.org/abs/2305.14314" style="color: var(--accent); text-decoration: none;">
+                            <strong>QLoRA: Efficient Finetuning of Quantized LLMs</strong>
+                        </a>
+                        <p style="margin-top: 0.25rem; color: var(--text-secondary);">4-bit NormalFloat (NF4) for efficient fine-tuning</p>
+                    </li>
+                    <li style="margin-bottom: 1rem;">
+                        <a href="https://arxiv.org/abs/2206.01861" style="color: var(--accent); text-decoration: none;">
+                            <strong>ZeroQuant: Efficient and Affordable Post-Training Quantization</strong>
+                        </a>
+                        <p style="margin-top: 0.25rem; color: var(--text-secondary);">Zero-shot quantization without calibration data</p>
+                    </li>
+                    <li style="margin-bottom: 1rem;">
+                        <a href="https://arxiv.org/abs/2404.00456" style="color: var(--accent); text-decoration: none;">
+                            <strong>QuaRot: Quantization with Rotations</strong>
+                        </a>
+                        <p style="margin-top: 0.25rem; color: var(--text-secondary);">Uses rotations to handle activation outliers</p>
+                    </li>
+                    <li style="margin-bottom: 1rem;">
+                        <a href="https://github.com/huggingface/transformers" style="color: var(--accent); text-decoration: none;">
+                            <strong>Hugging Face Transformers</strong>
+                        </a>
+                        <p style="margin-top: 0.25rem; color: var(--text-secondary);">Library with quantization support for various methods</p>
+                    </li>
+                </ul>
+            </div>
+        </section>
+        <!-- Playgrounds Page -->
+        <section id="playgrounds" class="page" role="tabpanel">
+            <header class="page-header">
+                <h1 class="page-title">Interactive Playgrounds</h1>
+                <p class="page-subtitle">Experiment with different quantization methods in real-time</p>
+            </header>
+
+            <style>
+                .playground-card {
+                    background-color: var(--bg-secondary);
+                    border: 1px solid var(--border);
+                    border-radius: 0.75rem;
+                    padding: 2rem;
+                    margin-bottom: 2rem;
+                }
+                
+                .playground-header {
+                    margin-bottom: 1.5rem;
+                    padding-bottom: 1rem;
+                    border-bottom: 2px solid var(--accent);
+                }
+                
+                .playground-title {
+                    font-size: 1.5rem;
+                    font-weight: 700;
+                    color: var(--accent);
+                    margin-bottom: 0.5rem;
+                }
+                
+                .playground-tags {
+                    display: flex;
+                    gap: 0.5rem;
+                    flex-wrap: wrap;
+                    margin-top: 0.5rem;
+                }
+                
+                .tag {
+                    padding: 0.25rem 0.75rem;
+                    background-color: var(--bg-tertiary);
+                    border: 1px solid var(--border);
+                    border-radius: 999px;
+                    font-size: 0.75rem;
+                    color: var(--text-secondary);
+                }
+                
+                .playground-controls {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+                    gap: 1.5rem;
+                    margin-bottom: 1.5rem;
+                }
+                
+                .control-group {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 0.5rem;
+                }
+                
+                .control-label {
+                    font-weight: 600;
+                    color: var(--text-primary);
+                    font-size: 0.9rem;
+                }
+                
+                .control-row {
+                    display: flex;
+                    align-items: center;
+                    gap: 1rem;
+                }
+                
+                input[type="range"] {
+                    flex: 1;
+                }
+                
+                .control-value {
+                    min-width: 80px;
+                    padding: 0.5rem;
+                    background-color: var(--bg-tertiary);
+                    border: 1px solid var(--border);
+                    border-radius: 0.375rem;
+                    text-align: center;
+                    font-family: 'Monaco', 'Menlo', monospace;
+                }
+                
+                .results-grid {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                    gap: 1rem;
+                }
+                
+                .result-card {
+                    padding: 1rem;
+                    background-color: var(--bg-tertiary);
+                    border: 1px solid var(--border);
+                    border-radius: 0.5rem;
+                }
+                
+                .result-label {
+                    font-size: 0.85rem;
+                    color: var(--text-secondary);
+                    margin-bottom: 0.25rem;
+                }
+                
+                .result-value {
+                    font-size: 1.5rem;
+                    font-weight: 700;
+                    color: var(--accent);
+                }
+                
+                .result-unit {
+                    font-size: 0.9rem;
+                    color: var(--text-tertiary);
+                    margin-left: 0.25rem;
+                }
+                
+                .matrix-table {
+                    width: 100%;
+                    border-collapse: separate;
+                    border-spacing: 0;
+                    margin-top: 1rem;
+                }
+                
+                .matrix-table th,
+                .matrix-table td {
+                    padding: 0.75rem;
+                    border: 1px solid var(--border);
+                    text-align: center;
+                    font-family: 'Monaco', 'Menlo', monospace;
+                    font-size: 0.9rem;
+                }
+                
+                .matrix-table th {
+                    background-color: var(--bg-tertiary);
+                    font-weight: 600;
+                }
+                
+                .matrix-table td {
+                    background-color: var(--bg-secondary);
+                }
+                
+                .visualization {
+                    margin-top: 1.5rem;
+                    padding: 1.5rem;
+                    background-color: var(--bg-tertiary);
+                    border-radius: 0.5rem;
+                    min-height: 200px;
+                }
+            </style>
+
+            <!-- GPTQ Playground -->
+            <div id="playground-gptq" class="playground-card">
+                <div class="playground-header">
+                    <h2 class="playground-title">GPTQ Playground</h2>
+                    <p>Post-training quantization with error-compensated rounding</p>
+                    <div class="playground-tags">
+                        <span class="tag">PTQ</span>
+                        <span class="tag">Weight-only</span>
+                        <span class="tag">INT4/INT8</span>
+                    </div>
+                </div>
+
+                <div class="playground-controls">
+                    <div class="control-group">
+                        <label class="control-label">Weight Bits</label>
+                        <div class="control-row">
+                            <input type="range" id="gptq-bits" min="2" max="8" value="4" step="1">
+                            <span class="control-value" id="gptq-bits-value">4 bits</span>
+                        </div>
+                    </div>
+                    <div class="control-group">
+                        <label class="control-label">Block Size</label>
+                        <div class="control-row">
+                            <input type="range" id="gptq-block" min="32" max="256" value="128" step="32">
+                            <span class="control-value" id="gptq-block-value">128</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="results-grid">
+                    <div class="result-card">
+                        <div class="result-label">Memory Savings</div>
+                        <div class="result-value" id="gptq-memory">75<span class="result-unit">%</span></div>
+                    </div>
+                    <div class="result-card">
+                        <div class="result-label">Compression Ratio</div>
+                        <div class="result-value" id="gptq-compression">4<span class="result-unit">×</span></div>
+                    </div>
+                    <div class="result-card">
+                        <div class="result-label">Estimated Error</div>
+                        <div class="result-value" id="gptq-error">2.1<span class="result-unit">%</span></div>
+                    </div>
+                </div>
+
+                <div class="visualization" id="gptq-viz">
+                    <canvas id="gptq-canvas" width="600" height="200"></canvas>
+                </div>
+            </div>
+
+            <!-- AWQ Playground -->
+            <div id="playground-awq" class="playground-card">
+                <div class="playground-header">
+                    <h2 class="playground-title">AWQ Playground</h2>
+                    <p>Activation-aware weight quantization protecting salient channels</p>
+                    <div class="playground-tags">
+                        <span class="tag">PTQ</span>
+                        <span class="tag">Weight-only</span>
+                        <span class="tag">Activation-aware</span>
+                    </div>
+                </div>
+
+                <div class="playground-controls">
+                    <div class="control-group">
+                        <label class="control-label">Weight Bits</label>
+                        <div class="control-row">
+                            <input type="range" id="awq-bits" min="3" max="8" value="4" step="1">
+                            <span class="control-value" id="awq-bits-value">4 bits</span>
+                        </div>
+                    </div>
+                    <div class="control-group">
+                        <label class="control-label">Salient Channel %</label>
+                        <div class="control-row">
+                            <input type="range" id="awq-salient" min="0" max="100" value="1" step="0.1">
+                            <span class="control-value" id="awq-salient-value">1%</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="results-grid">
+                    <div class="result-card">
+                        <div class="result-label">Memory Savings</div>
+                        <div class="result-value" id="awq-memory">75<span class="result-unit">%</span></div>
+                    </div>
+                    <div class="result-card">
+                        <div class="result-label">Protected Channels</div>
+                        <div class="result-value" id="awq-protected">64<span class="result-unit"></span></div>
+                    </div>
+                    <div class="result-card">
+                        <div class="result-label">Accuracy Loss</div>
+                        <div class="result-value" id="awq-accuracy">0.8<span class="result-unit">%</span></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SmoothQuant Playground -->
+            <div id="playground-smoothquant" class="playground-card">
+                <div class="playground-header">
+                    <h2 class="playground-title">SmoothQuant Playground</h2>
+                    <p>Shifts activation outliers into weights via cross-layer scaling</p>
+                    <div class="playground-tags">
+                        <span class="tag">PTQ</span>
+                        <span class="tag">Weights + Activations</span>
+                        <span class="tag">INT8</span>
+                    </div>
+                </div>
+
+                <div class="playground-controls">
+                    <div class="control-group">
+                        <label class="control-label">Smoothing Alpha (α)</label>
+                        <div class="control-row">
+                            <input type="range" id="smooth-alpha" min="0" max="1" value="0.5" step="0.1">
+                            <span class="control-value" id="smooth-alpha-value">0.5</span>
+                        </div>
+                    </div>
+                    <div class="control-group">
+                        <label class="control-label">Weight Bits</label>
+                        <div class="control-row">
+                            <input type="range" id="smooth-wbits" min="4" max="8" value="8" step="1">
+                            <span class="control-value" id="smooth-wbits-value">8 bits</span>
+                        </div>
+                    </div>
+                    <div class="control-group">
+                        <label class="control-label">Activation Bits</label>
+                        <div class="control-row">
+                            <input type="range" id="smooth-abits" min="4" max="8" value="8" step="1">
+                            <span class="control-value" id="smooth-abits-value">8 bits</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="results-grid">
+                    <div class="result-card">
+                        <div class="result-label">Memory Savings</div>
+                        <div class="result-value" id="smooth-memory">50<span class="result-unit">%</span></div>
+                    </div>
+                    <div class="result-card">
+                        <div class="result-label">Throughput Gain</div>
+                        <div class="result-value" id="smooth-throughput">2.1<span class="result-unit">×</span></div>
+                    </div>
+                    <div class="result-card">
+                        <div class="result-label">Outlier Reduction</div>
+                        <div class="result-value" id="smooth-outlier">85<span class="result-unit">%</span></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- LLM.int8() Playground -->
+            <div id="playground-llmint8" class="playground-card">
+                <div class="playground-header">
+                    <h2 class="playground-title">LLM.int8() Playground</h2>
+                    <p>Mixed precision routing outlier channels to FP16</p>
+                    <div class="playground-tags">
+                        <span class="tag">Runtime</span>
+                        <span class="tag">Mixed Precision</span>
+                        <span class="tag">INT8 + FP16</span>
+                    </div>
+                </div>
+
+                <div class="playground-controls">
+                    <div class="control-group">
+                        <label class="control-label">Outlier Threshold</label>
+                        <div class="control-row">
+                            <input type="range" id="llmint8-threshold" min="4" max="8" value="6" step="0.5">
+                            <span class="control-value" id="llmint8-threshold-value">6.0</span>
+                        </div>
+                    </div>
+                    <div class="control-group">
+                        <label class="control-label">Model Size (B params)</label>
+                        <div class="control-row">
+                            <input type="range" id="llmint8-size" min="1" max="175" value="70" step="1">
+                            <span class="control-value" id="llmint8-size-value">70B</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="results-grid">
+                    <div class="result-card">
+                        <div class="result-label">Memory Usage</div>
+                        <div class="result-value" id="llmint8-memory">70<span class="result-unit">GB</span></div>
+                    </div>
+                    <div class="result-card">
+                        <div class="result-label">FP16 Channels</div>
+                        <div class="result-value" id="llmint8-fp16">0.1<span class="result-unit">%</span></div>
+                    </div>
+                    <div class="result-card">
+                        <div class="result-label">Performance</div>
+                        <div class="result-value" id="llmint8-perf">95<span class="result-unit">%</span></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- QLoRA Playground -->
+            <div id="playground-qlora" class="playground-card">
+                <div class="playground-header">
+                    <h2 class="playground-title">QLoRA (NF4) Playground</h2>
+                    <p>Adapter training with 4-bit NF4 quantization</p>
+                    <div class="playground-tags">
+                        <span class="tag">Fine-tuning</span>
+                        <span class="tag">4-bit</span>
+                        <span class="tag">NF4</span>
+                    </div>
+                </div>
+
+                <div class="playground-controls">
+                    <div class="control-group">
+                        <label class="control-label">LoRA Rank (r)</label>
+                        <div class="control-row">
+                            <input type="range" id="qlora-rank" min="4" max="64" value="16" step="4">
+                            <span class="control-value" id="qlora-rank-value">16</span>
+                        </div>
+                    </div>
+                    <div class="control-group">
+                        <label class="control-label">LoRA Alpha (α)</label>
+                        <div class="control-row">
+                            <input type="range" id="qlora-alpha" min="4" max="64" value="32" step="4">
+                            <span class="control-value" id="qlora-alpha-value">32</span>
+                        </div>
+                    </div>
+                    <div class="control-group">
+                        <label class="control-label">Double Quantization</label>
+                        <div class="control-row">
+                            <div class="toggle-switch active" id="qlora-dq">
+                                <div class="toggle-slider"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="results-grid">
+                    <div class="result-card">
+                        <div class="result-label">Trainable Parameters</div>
+                        <div class="result-value" id="qlora-params">0.5<span class="result-unit">%</span></div>
+                    </div>
+                    <div class="result-card">
+                        <div class="result-label">Memory vs Full FT</div>
+                        <div class="result-value" id="qlora-memory">-80<span class="result-unit">%</span></div>
+                    </div>
+                    <div class="result-card">
+                        <div class="result-label">Training Speed</div>
+                        <div class="result-value" id="qlora-speed">0.7<span class="result-unit">×</span></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- KV Cache Quantization Playground -->
+            <div id="playground-kvcache" class="playground-card">
+                <div class="playground-header">
+                    <h2 class="playground-title">KV Cache Quantization Playground</h2>
+                    <p>Quantize attention KV cache to shrink memory for long context</p>
+                    <div class="playground-tags">
+                        <span class="tag">KV Cache</span>
+                        <span class="tag">Runtime</span>
+                        <span class="tag">INT8/INT4/FP8</span>
+                    </div>
+                </div>
+
+                <div class="playground-controls">
+                    <div class="control-group">
+                        <label class="control-label">KV Bits</label>
+                        <div class="control-row">
+                            <input type="range" id="kv-bits" min="4" max="8" value="8" step="1">
+                            <span class="control-value" id="kv-bits-value">8 bits</span>
+                        </div>
+                    </div>
+                    <div class="control-group">
+                        <label class="control-label">Context Length</label>
+                        <div class="control-row">
+                            <input type="range" id="kv-context" min="1024" max="32768" value="4096" step="1024">
+                            <span class="control-value" id="kv-context-value">4096</span>
+                        </div>
+                    </div>
+                    <div class="control-group">
+                        <label class="control-label">Layers</label>
+                        <div class="control-row">
+                            <input type="range" id="kv-layers" min="12" max="96" value="32" step="4">
+                            <span class="control-value" id="kv-layers-value">32</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="results-grid">
+                    <div class="result-card">
+                        <div class="result-label">KV Cache Size</div>
+                        <div class="result-value" id="kv-size">2.1<span class="result-unit">GB</span></div>
+                    </div>
+                    <div class="result-card">
+                        <div class="result-label">Memory Savings</div>
+                        <div class="result-value" id="kv-savings">50<span class="result-unit">%</span></div>
+                    </div>
+                    <div class="result-card">
+                        <div class="result-label">Max Batch Size</div>
+                        <div class="result-value" id="kv-batch">64<span class="result-unit"></span></div>
+                    </div>
+                </div>
+            </div>
+
+        </section>
+    </div>
+
+    <script>
+        // State Management
+        const state = {
+            currentPage: 'home',
+            theme: 'light',
+            quantizationSettings: {
+                weightBits: 8,
+                activationBits: 8,
+                symmetric: true,
+                perChannel: false,
+                outlierProtection: false
+            },
+            initialized: {
+                basics: false,
+                lab: false,
+                playgrounds: false
+            }
+        };
+
+        // Utility Functions
+        function quantizeUniform(array, bits, symmetric, perChannel = false) {
+            const maxVal = Math.max(...array.map(Math.abs));
+            const minVal = symmetric ? -maxVal : Math.min(...array);
+            
+            const range = maxVal - minVal;
+            const scale = range / ((1 << bits) - 1);
+            const zeroPoint = symmetric ? 0 : Math.round(-minVal / scale);
+            
+            const quantized = array.map(x => {
+                const q = Math.round(x / scale) + zeroPoint;
+                return Math.max(0, Math.min((1 << bits) - 1, q));
+            });
+            
+            return { quantized, scale, zeroPoint };
+        }
+
+        function dequantizeUniform(q, scale, zeroPoint) {
+            return q.map(x => (x - zeroPoint) * scale);
+        }
+
+        function mse(a, b) {
+            if (a.length !== b.length) return Infinity;
+            const sum = a.reduce((acc, val, i) => acc + Math.pow(val - b[i], 2), 0);
+            return sum / a.length;
+        }
+
+        function bytesFor(weightBits, actBits, paramsCount, kvBytesPerToken, seqLen) {
+            const weightBytes = (paramsCount * weightBits) / 8;
+            const actBytes = (paramsCount * actBits) / 8; // Simplified
+            const kvBytes = kvBytesPerToken * seqLen;
+            return (weightBytes + actBytes + kvBytes) / (1024 * 1024); // Convert to MB
+        }
+
+        // Navigation
+        function initNavigation() {
+            const navItems = document.querySelectorAll('.nav-item');
+            
+            navItems.forEach(item => {
+                item.addEventListener('click', (e) => {
+                    const targetPage = e.target.dataset.page;
+                    navigateToPage(targetPage);
+                    updateURL(targetPage);
+                });
+            });
+
+            // Handle URL hash changes
+            window.addEventListener('hashchange', () => {
+                const page = window.location.hash.slice(1) || 'home';
+                navigateToPage(page);
+            });
+
+            // Initial page from URL
+            const initialPage = window.location.hash.slice(1) || 'home';
+            navigateToPage(initialPage);
+        }
+
+        function navigateToPage(pageName) {
+            // Hide all pages
+            document.querySelectorAll('.page').forEach(page => {
+                page.classList.remove('active');
+            });
+            
+            // Show target page
+            const targetPage = document.getElementById(pageName);
+            if (targetPage) {
+                targetPage.classList.add('active');
+                state.currentPage = pageName;
+            }
+            
+            // Update nav active state
+            document.querySelectorAll('.nav-item').forEach(item => {
+                item.classList.toggle('active', item.dataset.page === pageName);
+                item.setAttribute('aria-selected', item.dataset.page === pageName);
+            });
+            
+            // Initialize page-specific content
+            initializePageContent(pageName);
+        }
+
+        function updateURL(pageName) {
+            window.location.hash = pageName;
+        }
+
+        function initializePageContent(pageName) {
+            // Use setTimeout to ensure page is fully rendered before initializing
+            setTimeout(() => {
+                switch(pageName) {
+                    case 'home':
+                        drawMemoryChart();
+                        break;
+                    case 'basics':
+                        initQuantizationDemo();
+                        break;
+                    case 'playgrounds':
+                        initPlaygrounds();
+                        break;
+                    case 'lab':
+                        initMiniLab();
+                        break;
+                }
+            }, 100);
+        }
+
+        // Theme Management
+        function initThemeToggle() {
+            const themeToggle = document.querySelector('.theme-toggle');
+            themeToggle.addEventListener('click', () => {
+                const currentTheme = document.documentElement.getAttribute('data-theme');
+                const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+                document.documentElement.setAttribute('data-theme', newTheme);
+                state.theme = newTheme;
+            });
+        }
+
+        // Chart Drawing Functions
+        function drawMemoryChart() {
+            const svg = document.getElementById('memoryChart');
+            if (!svg) return;
+            
+            const params = [1, 7, 30, 175]; // Billion parameters
+            const fp16Memory = params.map(p => p * 2); // GB
+            const int8Memory = params.map(p => p * 1); // GB  
+            const int4Memory = params.map(p => p * 0.5); // GB
+            
+            const width = 800;
+            const height = 400;
+            // Expand the left and right margins to give the Y‑axis ticks and label more breathing room.
+            // Without sufficient margin the rotated axis label and tick values crowd into the plotting area,
+            // making the chart appear cluttered. Increasing the margin ensures the scales stay outside
+            // of the plotted bars and improves legibility.
+            // Increase the left margin to accommodate the vertical Y‑axis label.  Without sufficient space
+            // the rotated label overlaps tick labels.  Here we allocate more space on the left and keep
+            // extra room at the bottom for the X‑axis labels.
+            const margin = { top: 30, right: 80, bottom: 80, left: 120 };
+            const chartWidth = width - margin.left - margin.right;
+            const chartHeight = height - margin.top - margin.bottom;
+            
+            // Clear existing content
+            svg.innerHTML = '';
+            
+            // Background
+            svg.innerHTML += `<rect x="${margin.left}" y="${margin.top}" width="${chartWidth}" height="${chartHeight}" fill="var(--bg-secondary)" stroke="var(--border)"/>`;
+            // Y-axis
+            const maxY = Math.max(...fp16Memory);
+            const yScale = (val) => margin.top + chartHeight - (val / maxY) * chartHeight;
+            
+            // Y-axis labels
+            for (let i = 0; i <= maxY; i += 50) {
+                const y = yScale(i);
+                svg.innerHTML += `<line x1="${margin.left}" y1="${y}" x2="${margin.left + chartWidth}" y2="${y}" stroke="var(--border)" stroke-dasharray="2,2"/>`;
+                svg.innerHTML += `<text x="${margin.left - 15}" y="${y + 5}" text-anchor="end" font-size="12" fill="var(--text-secondary)">${i}GB</text>`;
+            }
+            // X‑axis
+            // Treat the parameter values as categorical labels rather than positions on a continuous scale.  Using
+            // the number of parameters directly for spacing caused the first few bars to be compressed and the last bar to
+            // float far to the right.  Instead compute an equal width for each category across the chart width.
+            const xStep = chartWidth / params.length;
+            params.forEach((p, i) => {
+                const x = margin.left + (i + 0.5) * xStep;
+                svg.innerHTML += `<text x="${x}" y="${height - 30}" text-anchor="middle" font-size="12" fill="var(--text-secondary)">${p}B</text>`;
+            });
+
+            // Draw bars
+            const barWidth = xStep / 4;
+            // Each group of bars is centered within its category slot
+            fp16Memory.forEach((mem, i) => {
+                const xGroup = margin.left + (i + 0.5) * xStep;
+                const x = xGroup - barWidth * 1.5;
+                const h = (mem / maxY) * chartHeight;
+                const y = yScale(mem);
+                svg.innerHTML += `<rect x="${x}" y="${y}" width="${barWidth}" height="${h}" fill="#4361ee" opacity="0.8"/>`;
+            });
+
+            int8Memory.forEach((mem, i) => {
+                const xGroup = margin.left + (i + 0.5) * xStep;
+                const x = xGroup - barWidth * 0.5;
+                const h = (mem / maxY) * chartHeight;
+                const y = yScale(mem);
+                svg.innerHTML += `<rect x="${x}" y="${y}" width="${barWidth}" height="${h}" fill="#2f9e44" opacity="0.8"/>`;
+            });
+
+            int4Memory.forEach((mem, i) => {
+                const xGroup = margin.left + (i + 0.5) * xStep;
+                const x = xGroup + barWidth * 0.5;
+                const h = (mem / maxY) * chartHeight;
+                const y = yScale(mem);
+                svg.innerHTML += `<rect x="${x}" y="${y}" width="${barWidth}" height="${h}" fill="#f59f00" opacity="0.8"/>`;
+            });
+            
+            // Legend
+            const legendX = width - 150;
+            const legendY = 60;
+            svg.innerHTML += `<rect x="${legendX}" y="${legendY}" width="15" height="15" fill="#4361ee" opacity="0.8"/>`;
+            svg.innerHTML += `<text x="${legendX + 20}" y="${legendY + 12}" font-size="12" fill="var(--text-primary)">FP16</text>`;
+            
+            svg.innerHTML += `<rect x="${legendX}" y="${legendY + 25}" width="15" height="15" fill="#2f9e44" opacity="0.8"/>`;
+            svg.innerHTML += `<text x="${legendX + 20}" y="${legendY + 37}" font-size="12" fill="var(--text-primary)">INT8</text>`;
+            
+            svg.innerHTML += `<rect x="${legendX}" y="${legendY + 50}" width="15" height="15" fill="#f59f00" opacity="0.8"/>`;
+            svg.innerHTML += `<text x="${legendX + 20}" y="${legendY + 62}" font-size="12" fill="var(--text-primary)">INT4</text>`;
+            
+            // Axis labels
+            svg.innerHTML += `<text x="${width/2}" y="${height - 5}" text-anchor="middle" font-size="14" fill="var(--text-primary)">Parameters (Billions)</text>`;
+            // Position the Y‑axis label halfway through the left margin. Using margin.left/2 keeps the label
+            // outside of the plotting area even when the margin is adjusted. Rotating around this point
+            // allows the text to flow vertically without intersecting the chart.
+            // Position the Y‑axis label just to the left of the tick labels.  Using margin.left‑50 moves the
+            // label outside the tick area and prevents it from overlapping the axis and gridlines.
+            const yLabelX = margin.left - 70;
+            svg.innerHTML += `<text x="${yLabelX}" y="${height/2}" text-anchor="middle" font-size="14" fill="var(--text-primary)" transform="rotate(-90 ${yLabelX} ${height/2})">Memory (GB)</text>`;
+        }
+        // Interactive Demo Functions
+        function initQuantizationDemo() {
+            // Prevent duplicate initialization
+            if (state.initialized.basics) {
+                return;
+            }
+            state.initialized.basics = true;
+            
+            const bitWidthSlider = document.getElementById('bitWidthSlider');
+            const bitWidthValue = document.getElementById('bitWidthValue');
+            const symmetricToggle = document.getElementById('symmetricToggle');
+            
+            if (!bitWidthSlider || !bitWidthValue || !symmetricToggle) {
+                console.error('Quantization demo elements not found');
+                state.initialized.basics = false;
+                return;
+            }
+            
+            const originalVector = [0.15, -0.32, 0.87, -1.23, 2.45];
+            
+            function updateDemo() {
+                const bits = parseInt(bitWidthSlider.value);
+                const symmetric = symmetricToggle.classList.contains('active');
+                
+                bitWidthValue.textContent = `${bits} bits`;
+                
+                const { quantized, scale, zeroPoint } = quantizeUniform(originalVector, bits, symmetric);
+                const dequantized = dequantizeUniform(quantized, scale, zeroPoint);
+                const error = mse(originalVector, dequantized);
+                
+                const quantizedVectorEl = document.getElementById('quantizedVector');
+                const quantizationErrorEl = document.getElementById('quantizationError');
+                
+                if (quantizedVectorEl) {
+                    quantizedVectorEl.textContent = '[' + dequantized.map(x => x.toFixed(3)).join(', ') + ']';
+                }
+                if (quantizationErrorEl) {
+                    quantizationErrorEl.textContent = error.toFixed(6);
+                }
+                
+                drawErrorChart(originalVector, dequantized);
+            }
+            
+            bitWidthSlider.addEventListener('input', updateDemo);
+            
+            // Initialize toggle visual state
+            if (state.quantizationSettings.symmetric) {
+                symmetricToggle.classList.add('active');
+            } else {
+                symmetricToggle.classList.remove('active');
+            }
+            
+            symmetricToggle.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                const isActive = this.classList.contains('active');
+                if (isActive) {
+                    this.classList.remove('active');
+                } else {
+                    this.classList.add('active');
+                }
+                
+                // Force repaint
+                void this.offsetHeight;
+                
+                // Use requestAnimationFrame to ensure style is applied
+                requestAnimationFrame(() => {
+                    state.quantizationSettings.symmetric = this.classList.contains('active');
+                    updateDemo();
+                });
+            });
+            
+            updateDemo();
+        }
+function drawErrorChart(original, dequantized) {
+            const svg = document.getElementById('errorChart');
+            if (!svg) return;
+            
+            const width = 800;
+            const height = 300;
+            const margin = { top: 40, right: 40, bottom: 60, left: 60 };
+            const chartWidth = width - margin.left - margin.right;
+            const chartHeight = height - margin.top - margin.bottom;
+            
+            svg.innerHTML = '';
+            
+            // Background
+            svg.innerHTML += `<rect x="${margin.left}" y="${margin.top}" width="${chartWidth}" height="${chartHeight}" fill="var(--bg-secondary)" stroke="var(--border)"/>`;
+            
+            // Title
+            svg.innerHTML += `<text x="${width/2}" y="25" text-anchor="middle" font-size="16" font-weight="bold" fill="var(--text-primary)">Quantization Error Visualization</text>`;
+            
+            // Calculate scales
+            const allValues = [...original, ...dequantized];
+            const minY = Math.min(...allValues);
+            const maxY = Math.max(...allValues);
+            const yScale = (val) => margin.top + chartHeight - ((val - minY) / (maxY - minY)) * chartHeight;
+            const xStep = chartWidth / original.length;
+            
+            // Draw lines
+            let pathOriginal = `M ${margin.left} ${yScale(original[0])}`;
+            let pathDequant = `M ${margin.left} ${yScale(dequantized[0])}`;
+            
+            original.forEach((val, i) => {
+                const x = margin.left + i * xStep;
+                pathOriginal += ` L ${x} ${yScale(val)}`;
+                pathDequant += ` L ${x} ${yScale(dequantized[i])}`;
+            });
+            
+            svg.innerHTML += `<path d="${pathOriginal}" stroke="#4361ee" stroke-width="2" fill="none"/>`;
+            svg.innerHTML += `<path d="${pathDequant}" stroke="#e03131" stroke-width="2" fill="none" stroke-dasharray="5,5"/>`;
+            
+            // Draw points
+            original.forEach((val, i) => {
+                const x = margin.left + i * xStep;
+                const y = yScale(val);
+                svg.innerHTML += `<circle cx="${x}" cy="${y}" r="4" fill="#4361ee"/>`;
+                
+                const ydq = yScale(dequantized[i]);
+                svg.innerHTML += `<circle cx="${x}" cy="${ydq}" r="4" fill="#e03131"/>`;
+                
+                // Error line
+                if (Math.abs(val - dequantized[i]) > 0.01) {
+                    svg.innerHTML += `<line x1="${x}" y1="${y}" x2="${x}" y2="${ydq}" stroke="#f59f00" stroke-width="1" stroke-dasharray="2,2"/>`;
+                }
+            });
+            
+            // X-axis labels
+            original.forEach((_, i) => {
+                const x = margin.left + i * xStep;
+                svg.innerHTML += `<text x="${x}" y="${height - 20}" text-anchor="middle" font-size="12" fill="var(--text-secondary)">[${i}]</text>`;
+            });
+            
+            // Legend
+            svg.innerHTML += `<line x1="${width - 150}" y1="60" x2="${width - 130}" y2="60" stroke="#4361ee" stroke-width="2"/>`;
+            svg.innerHTML += `<text x="${width - 125}" y="64" font-size="12" fill="var(--text-primary)">Original</text>`;
+            
+            svg.innerHTML += `<line x1="${width - 150}" y1="80" x2="${width - 130}" y2="80" stroke="#e03131" stroke-width="2" stroke-dasharray="5,5"/>`;
+            svg.innerHTML += `<text x="${width - 125}" y="84" font-size="12" fill="var(--text-primary)">Dequantized</text>`;
+        }
+        // Mini Lab Functions
+        function initMiniLab() {
+            // Prevent duplicate initialization
+            if (state.initialized.lab) {
+                return;
+            }
+            state.initialized.lab = true;
+            
+            const weightBitsSlider = document.getElementById('weightBitsSlider');
+            const activationBitsSlider = document.getElementById('activationBitsSlider');
+            const weightBitsValue = document.getElementById('weightBitsValue');
+            const activationBitsValue = document.getElementById('activationBitsValue');
+            const perChannelToggle = document.getElementById('perChannelToggle');
+            const outlierToggle = document.getElementById('outlierToggle');
+            const resetButton = document.getElementById('resetLab');
+            
+            if (!weightBitsSlider || !activationBitsSlider || !weightBitsValue || !activationBitsValue || 
+                !perChannelToggle || !outlierToggle || !resetButton) {
+                console.error('Mini lab elements not found');
+                state.initialized.lab = false;
+                return;
+            }
+            
+            // Initialize toggle visual states
+            if (state.quantizationSettings.perChannel) {
+                perChannelToggle.classList.add('active');
+            } else {
+                perChannelToggle.classList.remove('active');
+            }
+            
+            if (state.quantizationSettings.outlierProtection) {
+                outlierToggle.classList.add('active');
+            } else {
+                outlierToggle.classList.remove('active');
+            }
+            
+            // Sample layer data
+            const weights = [[0.5, -0.3, 1.2], [-0.8, 0.7, -0.1]];
+            const activations = [0.7, -1.5, 0.3];
+            const bias = [0.1, -0.2];
+            
+            function updateLab() {
+                const weightBits = parseInt(weightBitsSlider.value);
+                const activationBits = parseInt(activationBitsSlider.value);
+                const perChannel = perChannelToggle.classList.contains('active');
+                const outlier = outlierToggle.classList.contains('active');
+                
+                weightBitsValue.textContent = weightBits;
+                activationBitsValue.textContent = activationBits;
+                
+                // Calculate memory estimate
+                const params = weights.flat().length + bias.length;
+                const memoryMB = bytesFor(weightBits, activationBits, params, 1024, 512);
+                document.getElementById('memoryEstimate').textContent = memoryMB.toFixed(2);
+                
+                // Simple quantization simulation
+                const flatWeights = weights.flat();
+                const { quantized: qWeights, scale: wScale } = quantizeUniform(flatWeights, weightBits, true, perChannel);
+                const { quantized: qActs, scale: aScale } = quantizeUniform(activations, activationBits, true, false);
+                
+                const dqWeights = dequantizeUniform(qWeights, wScale, 0);
+                const dqActs = dequantizeUniform(qActs, aScale, 0);
+                
+                // Reshape back
+                const quantizedWeights = [];
+                for (let i = 0; i < weights.length; i++) {
+                    quantizedWeights.push(dqWeights.slice(i * 3, (i + 1) * 3));
+                }
+                
+                // Calculate MSE
+                const originalOutput = computeLayerOutput(weights, activations, bias);
+                const quantizedOutput = computeLayerOutput(quantizedWeights, dqActs, bias);
+                const error = mse(originalOutput, quantizedOutput);
+                
+                document.getElementById('mseError').textContent = error.toFixed(6);
+                
+                // Update example display
+                document.getElementById('layerExample').innerHTML = `
+W = [[${quantizedWeights[0].map(x => x.toFixed(3)).join(', ')}],
+     [${quantizedWeights[1].map(x => x.toFixed(3)).join(', ')}]]
+x = [${dqActs.map(x => x.toFixed(3)).join(', ')}]
+b = [${bias.join(', ')}]
+
+Original Output: [${originalOutput.map(x => x.toFixed(3)).join(', ')}]
+Quantized Output: [${quantizedOutput.map(x => x.toFixed(3)).join(', ')}]
+                `;
+                
+                drawErrorBars(originalOutput, quantizedOutput);
+            }
+            
+            weightBitsSlider.addEventListener('input', updateLab);
+            activationBitsSlider.addEventListener('input', updateLab);
+            perChannelToggle.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                const isActive = this.classList.contains('active');
+                if (isActive) {
+                    this.classList.remove('active');
+                } else {
+                    this.classList.add('active');
+                }
+                
+                // Force repaint
+                void this.offsetHeight;
+                
+                // Use requestAnimationFrame to ensure style is applied
+                requestAnimationFrame(() => {
+                    state.quantizationSettings.perChannel = this.classList.contains('active');
+                    updateLab();
+                });
+            });
+
+            outlierToggle.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                const isActive = this.classList.contains('active');
+                if (isActive) {
+                    this.classList.remove('active');
+                } else {
+                    this.classList.add('active');
+                }
+                
+                // Force repaint
+                void this.offsetHeight;
+                
+                // Use requestAnimationFrame to ensure style is applied
+                requestAnimationFrame(() => {
+                    state.quantizationSettings.outlierProtection = this.classList.contains('active');
+                    updateLab();
+                });
+            });
+resetButton.addEventListener('click', () => {
+                weightBitsSlider.value = 8;
+                activationBitsSlider.value = 8;
+                perChannelToggle.classList.remove('active');
+                outlierToggle.classList.remove('active');
+                updateLab();
+            });
+            
+            updateLab();
+        }
+function computeLayerOutput(weights, inputs, bias) {
+            return weights.map((row, i) => 
+                row.reduce((sum, w, j) => sum + w * inputs[j], 0) + bias[i]
+            );
+        }
+
+        function drawErrorBars(original, quantized) {
+            const canvas = document.getElementById('errorBarChart');
+            if (!canvas) return;
+            
+            const ctx = canvas.getContext('2d');
+            const width = canvas.width;
+            const height = canvas.height;
+            
+            // Clear canvas
+            ctx.clearRect(0, 0, width, height);
+            
+            // Calculate errors
+            const errors = original.map((orig, i) => Math.abs(orig - quantized[i]));
+            const maxError = Math.max(...errors);
+            
+            // Draw bars
+            const barWidth = width / (errors.length * 2);
+            const maxBarHeight = height - 40;
+            
+            errors.forEach((error, i) => {
+                const x = (i * 2 + 0.5) * barWidth;
+                const barHeight = (error / maxError) * maxBarHeight;
+                const y = height - barHeight - 20;
+                
+                // Determine color based on error magnitude
+                const intensity = error / maxError;
+                const red = Math.floor(255 * intensity);
+                const green = Math.floor(255 * (1 - intensity));
+                
+                ctx.fillStyle = `rgb(${red}, ${green}, 100)`;
+                ctx.fillRect(x, y, barWidth, barHeight);
+                
+                // Add label
+                ctx.fillStyle = 'var(--text-primary)';
+                ctx.font = '10px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText(`[${i}]`, x + barWidth/2, height - 5);
+                ctx.fillText(error.toFixed(3), x + barWidth/2, y - 5);
+            });
+            
+            // Add title
+            ctx.fillStyle = 'var(--text-primary)';
+            ctx.font = '12px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('Per-output Error', width/2, 15);
+        }
+
+        // Initialize everything when DOM is ready
+
+        // Playgrounds Functions
+        function initPlaygrounds() {
+            if (state.initialized.playgrounds) {
+                return;
+            }
+            state.initialized.playgrounds = true;
+
+            // Initialize GPTQ playground
+            initGPTQPlayground();
+            // Initialize AWQ playground
+            initAWQPlayground();
+            // Initialize SmoothQuant playground
+            initSmoothQuantPlayground();
+            // Initialize LLM.int8() playground
+            initLLMInt8Playground();
+            // Initialize QLoRA playground
+            initQLoRAPlayground();
+            // Initialize KV Cache playground
+            initKVCachePlayground();
+        }
+
+        function initGPTQPlayground() {
+            const bitsSlider = document.getElementById('gptq-bits');
+            const blockSlider = document.getElementById('gptq-block');
+            const bitsValue = document.getElementById('gptq-bits-value');
+            const blockValue = document.getElementById('gptq-block-value');
+
+            if (!bitsSlider || !blockSlider) return;
+
+            function updateGPTQ() {
+                const bits = parseInt(bitsSlider.value);
+                const blockSize = parseInt(blockSlider.value);
+
+                bitsValue.textContent = `${bits} bits`;
+                blockValue.textContent = blockSize;
+
+                // Calculate metrics
+                const compression = 16 / bits;
+                const memory = ((bits / 16) * 100).toFixed(0);
+                const error = (Math.pow(2, 8 - bits) * 0.3).toFixed(1);
+
+                document.getElementById('gptq-memory').innerHTML = `${(100 - memory)}<span class="result-unit">%</span>`;
+                document.getElementById('gptq-compression').innerHTML = `${compression.toFixed(1)}<span class="result-unit">×</span>`;
+                document.getElementById('gptq-error').innerHTML = `${error}<span class="result-unit">%</span>`;
+
+                drawGPTQVisualization(bits, blockSize);
+            }
+
+            bitsSlider.addEventListener('input', updateGPTQ);
+            blockSlider.addEventListener('input', updateGPTQ);
+            updateGPTQ();
+        }
+
+        function drawGPTQVisualization(bits, blockSize) {
+            const canvas = document.getElementById('gptq-canvas');
+            if (!canvas) return;
+
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Draw simple bar chart showing quantization levels
+            const levels = Math.pow(2, bits);
+            const barWidth = canvas.width / levels;
+            const maxHeight = canvas.height - 40;
+
+            for (let i = 0; i < levels; i++) {
+                const height = (Math.random() * 0.5 + 0.5) * maxHeight;
+                const x = i * barWidth;
+                const y = canvas.height - height - 20;
+
+                ctx.fillStyle = `hsl(${210 + (i / levels) * 60}, 70%, 60%)`;
+                ctx.fillRect(x, y, barWidth - 2, height);
+            }
+
+            ctx.fillStyle = 'var(--text-secondary)';
+            ctx.font = '12px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(`${levels} Quantization Levels (${bits}-bit)`, canvas.width / 2, canvas.height - 5);
+        }
+
+        function initAWQPlayground() {
+            const bitsSlider = document.getElementById('awq-bits');
+            const salientSlider = document.getElementById('awq-salient');
+            const bitsValue = document.getElementById('awq-bits-value');
+            const salientValue = document.getElementById('awq-salient-value');
+
+            if (!bitsSlider || !salientSlider) return;
+
+            function updateAWQ() {
+                const bits = parseInt(bitsSlider.value);
+                const salient = parseFloat(salientSlider.value);
+
+                bitsValue.textContent = `${bits} bits`;
+                salientValue.textContent = `${salient}%`;
+
+                const memory = ((bits / 16) * 100).toFixed(0);
+                const protected = Math.floor(4096 * (salient / 100));
+                const accuracy = (Math.pow(2, 8 - bits) * 0.2 * (2 - salient / 50)).toFixed(1);
+
+                document.getElementById('awq-memory').innerHTML = `${(100 - memory)}<span class="result-unit">%</span>`;
+                document.getElementById('awq-protected').innerHTML = `${protected}<span class="result-unit"></span>`;
+                document.getElementById('awq-accuracy').innerHTML = `${accuracy}<span class="result-unit">%</span>`;
+            }
+
+            bitsSlider.addEventListener('input', updateAWQ);
+            salientSlider.addEventListener('input', updateAWQ);
+            updateAWQ();
+        }
+
+        function initSmoothQuantPlayground() {
+            const alphaSlider = document.getElementById('smooth-alpha');
+            const wbitsSlider = document.getElementById('smooth-wbits');
+            const abitsSlider = document.getElementById('smooth-abits');
+            const alphaValue = document.getElementById('smooth-alpha-value');
+            const wbitsValue = document.getElementById('smooth-wbits-value');
+            const abitsValue = document.getElementById('smooth-abits-value');
+
+            if (!alphaSlider || !wbitsSlider || !abitsSlider) return;
+
+            function updateSmoothQuant() {
+                const alpha = parseFloat(alphaSlider.value);
+                const wbits = parseInt(wbitsSlider.value);
+                const abits = parseInt(abitsSlider.value);
+
+                alphaValue.textContent = alpha.toFixed(1);
+                wbitsValue.textContent = `${wbits} bits`;
+                abitsValue.textContent = `${abits} bits`;
+
+                const avgBits = (wbits + abits) / 2;
+                const memory = (100 - (avgBits / 16) * 100).toFixed(0);
+                const throughput = (16 / avgBits).toFixed(1);
+                const outlier = (alpha * 100).toFixed(0);
+
+                document.getElementById('smooth-memory').innerHTML = `${memory}<span class="result-unit">%</span>`;
+                document.getElementById('smooth-throughput').innerHTML = `${throughput}<span class="result-unit">×</span>`;
+                document.getElementById('smooth-outlier').innerHTML = `${outlier}<span class="result-unit">%</span>`;
+            }
+
+            alphaSlider.addEventListener('input', updateSmoothQuant);
+            wbitsSlider.addEventListener('input', updateSmoothQuant);
+            abitsSlider.addEventListener('input', updateSmoothQuant);
+            updateSmoothQuant();
+        }
+
+        function initLLMInt8Playground() {
+            const thresholdSlider = document.getElementById('llmint8-threshold');
+            const sizeSlider = document.getElementById('llmint8-size');
+            const thresholdValue = document.getElementById('llmint8-threshold-value');
+            const sizeValue = document.getElementById('llmint8-size-value');
+
+            if (!thresholdSlider || !sizeSlider) return;
+
+            function updateLLMInt8() {
+                const threshold = parseFloat(thresholdSlider.value);
+                const size = parseInt(sizeSlider.value);
+
+                thresholdValue.textContent = threshold.toFixed(1);
+                sizeValue.textContent = `${size}B`;
+
+                const memory = (size * 1).toFixed(0); // Roughly 1GB per billion params at INT8
+                const fp16Percent = (Math.pow(2, -(threshold - 4)) * 100).toFixed(1);
+                const perf = (100 - fp16Percent * 0.5).toFixed(0);
+
+                document.getElementById('llmint8-memory').innerHTML = `${memory}<span class="result-unit">GB</span>`;
+                document.getElementById('llmint8-fp16').innerHTML = `${fp16Percent}<span class="result-unit">%</span>`;
+                document.getElementById('llmint8-perf').innerHTML = `${perf}<span class="result-unit">%</span>`;
+            }
+
+            thresholdSlider.addEventListener('input', updateLLMInt8);
+            sizeSlider.addEventListener('input', updateLLMInt8);
+            updateLLMInt8();
+        }
+
+        function initQLoRAPlayground() {
+            const rankSlider = document.getElementById('qlora-rank');
+            const alphaSlider = document.getElementById('qlora-alpha');
+            const dqToggle = document.getElementById('qlora-dq');
+            const rankValue = document.getElementById('qlora-rank-value');
+            const alphaValue = document.getElementById('qlora-alpha-value');
+
+            if (!rankSlider || !alphaSlider || !dqToggle) return;
+
+            function updateQLoRA() {
+                const rank = parseInt(rankSlider.value);
+                const alpha = parseInt(alphaSlider.value);
+                const dq = dqToggle.classList.contains('active');
+
+                rankValue.textContent = rank;
+                alphaValue.textContent = alpha;
+
+                const params = (rank / 4096 * 100).toFixed(1);
+                const memSavings = dq ? 80 : 75;
+                const speed = (0.5 + rank / 128).toFixed(1);
+
+                document.getElementById('qlora-params').innerHTML = `${params}<span class="result-unit">%</span>`;
+                document.getElementById('qlora-memory').innerHTML = `-${memSavings}<span class="result-unit">%</span>`;
+                document.getElementById('qlora-speed').innerHTML = `${speed}<span class="result-unit">×</span>`;
+            }
+
+            rankSlider.addEventListener('input', updateQLoRA);
+            alphaSlider.addEventListener('input', updateQLoRA);
+            
+            dqToggle.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                this.classList.toggle('active');
+                updateQLoRA();
+            });
+
+            updateQLoRA();
+        }
+
+        function initKVCachePlayground() {
+            const bitsSlider = document.getElementById('kv-bits');
+            const contextSlider = document.getElementById('kv-context');
+            const layersSlider = document.getElementById('kv-layers');
+            const bitsValue = document.getElementById('kv-bits-value');
+            const contextValue = document.getElementById('kv-context-value');
+            const layersValue = document.getElementById('kv-layers-value');
+
+            if (!bitsSlider || !contextSlider || !layersSlider) return;
+
+            function updateKVCache() {
+                const bits = parseInt(bitsSlider.value);
+                const context = parseInt(contextSlider.value);
+                const layers = parseInt(layersSlider.value);
+
+                bitsValue.textContent = `${bits} bits`;
+                contextValue.textContent = context;
+                layersValue.textContent = layers;
+
+                // Rough calculation: layers * context * hidden_dim * 2 (K+V) * bits / 8 / 1e9
+                const hiddenDim = 4096;
+                const kvSize = (layers * context * hiddenDim * 2 * bits / 8 / 1e9).toFixed(1);
+                const savings = ((16 - bits) / 16 * 100).toFixed(0);
+                const batchSize = Math.floor(24 / parseFloat(kvSize)); // Assuming 24GB VRAM
+
+                document.getElementById('kv-size').innerHTML = `${kvSize}<span class="result-unit">GB</span>`;
+                document.getElementById('kv-savings').innerHTML = `${savings}<span class="result-unit">%</span>`;
+                document.getElementById('kv-batch').innerHTML = `${batchSize}<span class="result-unit"></span>`;
+            }
+
+            bitsSlider.addEventListener('input', updateKVCache);
+            contextSlider.addEventListener('input', updateKVCache);
+            layersSlider.addEventListener('input', updateKVCache);
+            updateKVCache();
+        }
+        document.addEventListener('DOMContentLoaded', () => {
+            initNavigation();
+            initThemeToggle();
+            initializePageContent('home');
+        });
+    </script>
+</body>
+</html>
