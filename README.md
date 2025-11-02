@@ -2,7 +2,7 @@
 
 An interactive, educational web application for understanding Large Language Model (LLM) quantization techniques. Explore different quantization methods, experiment with parameters in real-time, and visualize their impact on memory, performance, and accuracy.
 
-[![Live Demo](https://img.shields.io/badge/Live-Demo-blue?style=for-the-badge)](https://github.com/GhoshSrinjoy/Quantization-with-Playgrounds.git)
+[![Live Demo](https://img.shields.io/badge/Live-Demo-blue?style=for-the-badge)](https://ghoshsrinjoy.github.io/Quantization-with-Playgrounds/)
 [![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
 
 ## ✨ Features
